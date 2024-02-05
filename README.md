@@ -1,2 +1,3 @@
 # cassandra-data-migrator
-Cassandra Data Migrator docker image designed to be run by a container orchestrator
+
+[Cassandra Data Migrator](https://github.com/datastax/cassandra-data-migrator) Docker image designed to be run by a container orchestrator.
