@@ -1,0 +1,15 @@
+#!/bin/bash
+
+#exec spark-submit \
+#  --properties-file "$CDM_DEFAULT_PROPERTIES" \
+#  --master "local[*]" \
+#  --driver-memory "$CDM_DRIVER_MEMORY" \
+#  --executor-memory "$CDM_EXECUTOR_MEMORY" \
+#  --class com.datastax.cdm.job.Migrate /opt/cassandra-data-migrator/cassandra-data-migrator.jar &> logfile_name_$(date +%Y%m%d_%H_%M).txt
+
+exec spark-submit \
+  --properties-file "$CDM_DEFAULT_PROPERTIES" \
+  --master "local[*]" \
+  --driver-memory "$CDM_DRIVER_MEMORY" \
+  --executor-memory "$CDM_EXECUTOR_MEMORY" \
+  --class com.datastax.cdm.job.Migrate /opt/cassandra-data-migrator/cassandra-data-migrator.jar
