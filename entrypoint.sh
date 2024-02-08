@@ -52,6 +52,8 @@ trap_exit() {
 set_operating_file_values() {
   local file_path="$1"
   local env_var_prefix="$2"
+  local delimiter="$3"
+  local delimiter_regex="[\ ]+"
 
   env_config_values=("$(env | grep "$env_var_prefix" || echo '')")
 
@@ -59,6 +61,11 @@ set_operating_file_values() {
   then
     info "No environment variables with prefix '$env_var_prefix' found; using default property values in $file_path"
     return 0
+  fi
+
+  if [ -n "$delimiter" ]
+  then
+    delimiter_regex="[\ ]*${delimiter}[\ ]*"
   fi
 
   info "Updating settings in $file_path"
@@ -90,14 +97,16 @@ set_operating_file_values() {
 
     # perform a case insensitive search and replace as the conf_key is all lower case and the CDM Properties file
     # contains camel case properties.
-    sed -i -E "s,^[#]?($conf_key)([\ ]+).*,\1\2${new_conf_val},i" "$file_path"
+    sed -i -E "s;^[#]?($conf_key)($delimiter_regex).*;\1\2${new_conf_val};i" "$file_path"
 
+    info "${info_msg}"
     info "${info_msg}"
 
     done
 }
 
-set_operating_file_values "$CDM_DEFAULT_PROPERTIES" "CDM_PROPERTY_"
+set_operating_file_values "$CDM_PROPERTIES_FILE" "CDM_PROPERTY_" ""
+set_operating_file_values "$CDM_LOG4J_CONFIGURATION" "CDM_LOGGING_" "="
 
 info "Ready to run Cassandra Data Migrator. Run spark-submit-cdm to start the migration."
 tail -f /dev/null

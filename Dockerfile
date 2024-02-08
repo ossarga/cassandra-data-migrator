@@ -42,15 +42,21 @@ ENV CDM_JAR=/opt/cassandra-data-migrator/cassandra-data-migrator.jar \
     CDM_PARTITIONS_CSV=/opt/cassandra-data-migrator/partitions.csv \
     CDM_PRIMARY_KEY_ROWS_CSV=/opt/cassandra-data-migrator/primary_key_rows.csv
 
-ENV CDM_DEFAULT_PROPERTIES=$CDM_DETAILED_PROPERTIES
+ENV CDM_PROPERTIES_FILE=$CDM_DETAILED_PROPERTIES
 
 RUN mkdir -p /var/log/cassandra-data-migrator
 
 # Set up logging
-ENV CDM_LOGGING=/var/log/cassandra-data-migrator \
-    CDM_LOGGING_LEVEL=INFO \
-    CDM_LOGGING_OUTPUT=file
+COPY log4j.properties log4j.xml ./
 
+ENV CDM_LOG_DIR=/var/log/cassandra-data-migrator/ \
+    CDM_VM_LOGGING_LEVEL=WARN \
+    CDM_LOG4J_PROPERTIES=/opt/cassandra-data-migrator/log4j.properties \
+    CDM_LOG4J_XML=/opt/cassandra-data-migrator/log4j.xml
+
+ENV CDM_LOG4J_CONFIGURATION=$CDM_LOG4J_PROPERTIES
+
+# Spark environment variables
 ENV CDM_DRIVER_MEMORY=25G \
     CDM_EXECUTOR_MEMORY=25G
 

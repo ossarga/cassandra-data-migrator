@@ -1,14 +1,8 @@
 #!/bin/bash
 
-#exec spark-submit \
-#  --properties-file "$CDM_DEFAULT_PROPERTIES" \
-#  --master "local[*]" \
-#  --driver-memory "$CDM_DRIVER_MEMORY" \
-#  --executor-memory "$CDM_EXECUTOR_MEMORY" \
-#  --class com.datastax.cdm.job.Migrate /opt/cassandra-data-migrator/cassandra-data-migrator.jar &> logfile_name_$(date +%Y%m%d_%H_%M).txt
-
 exec spark-submit \
-  --properties-file "$CDM_DEFAULT_PROPERTIES" \
+  --driver-java-options "-Dlog4j.configuration=file:$CDM_LOG4J_CONFIGURATION -Dvm.logging.level=$CDM_VM_LOGGING_LEVEL" \
+  --properties-file "$CDM_PROPERTIES_FILE" \
   --master "local[*]" \
   --driver-memory "$CDM_DRIVER_MEMORY" \
   --executor-memory "$CDM_EXECUTOR_MEMORY" \
