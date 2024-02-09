@@ -87,19 +87,19 @@ set_operating_file_values() {
       error_exit "Unable to find property $conf_key in $file_path"
     fi
 
-    info_msg="${conf_key}"
     if [ "${conf_line:0:1}" == "#" ]
     then
-      info_msg=" - Enabling property $info_msg"
+      info_msg=" - Enabling"
     else
-      info_msg=" - Updating property $info_msg"
+      info_msg=" - Updating"
     fi
+
+    info_msg="$info_msg property $conf_key"
 
     # perform a case insensitive search and replace as the conf_key is all lower case and the CDM Properties file
     # contains camel case properties.
     sed -i -E "s;^[#]?($conf_key)($delimiter_regex).*;\1\2${new_conf_val};i" "$file_path"
 
-    info "${info_msg}"
     info "${info_msg}"
 
     done
