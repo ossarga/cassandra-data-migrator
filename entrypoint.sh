@@ -105,6 +105,11 @@ set_operating_file_values() {
     done
 }
 
+info "Setting up Cassandra Data Migrator $CDM_VERSION"
+info "Using Java $JAVA_VERSION"
+info "Using Spark $SPARK_VERSION"
+info "Using Scala $SCALA_VERSION"
+
 set_operating_file_values "$CDM_PROPERTIES_FILE" "CDM_PROPERTY_" ""
 set_operating_file_values "$CDM_LOG4J_CONFIGURATION" "CDM_LOGGING_" "="
 
