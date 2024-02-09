@@ -87,7 +87,7 @@ set_operating_file_values() {
       error_exit "Unable to find property $conf_key in $file_path"
     fi
 
-    info_msg="${conf_key} -> ${new_conf_val}"
+    info_msg="${conf_key}"
     if [ "${conf_line:0:1}" == "#" ]
     then
       info_msg=" - Enabling property $info_msg"
