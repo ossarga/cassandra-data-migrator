@@ -78,8 +78,9 @@ set_operating_file_values() {
   info "Updating settings in $file_path"
   for env_var in ${env_config_values[*]}
   do
-    conf_key=$(cut -d'=' -f1 <<<"${env_var/$env_var_prefix/}" | tr '[:upper:]' '[:lower:]' | tr '_' '.')
-    new_conf_val="${env_var/*=/}"
+    env_var_key=$(cut -d'=' -f1 <<<"${env_var/$env_var_prefix/}")
+    conf_key=$(tr '[:upper:]' '[:lower:]' <<<"$env_var_key" | tr '_' '.')
+    new_conf_val=${env_var/${env_var_prefix}${env_var_key}=/}
 
     temp_conf_val=""
     if [ "${new_conf_val:0:4}" = "env:" ]
