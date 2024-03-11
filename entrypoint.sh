@@ -52,21 +52,71 @@ trap_exit() {
   error "$err_msg_out with exit code $rtn_code."
 }
 
+set_cluster_role_credentials() {
+  local cluster_role="$1"
+  local credentials_user=""
+  local cred_properties=("username" "password")
+
+  eval "credentials_user=\${CDM_CREDENTIALS_${cluster_role}_USER:-}"
+  [ -z "$credentials_user" ] && return
+  [ ! -f "$credentials_user" ] && \
+    error_exit "Unable to find credentials file $credentials_user specified in CDM_CREDENTIALS_${cluster_role}_USER"
+
+  info "Reading credentials from $credentials_user for $cluster_role cluster"
+
+  for prop_i in ${cred_properties[*]}
+  do
+    eval "env_cdm_connect_val=\${CDM_PROPERTY_SPARK_CDM_CONNECT_${cluster_role}_${prop_i^^}:-}"
+
+    if [ -z "$env_cdm_connect_val" ]
+    then
+      cred_prop_val=$(jq -r ".${prop_i}" <"${credentials_user}")
+      set_operating_file_values \
+        "$CDM_PROPERTIES_FILE" \
+        "env:SPARK_CDM_CONNECT_${cluster_role}_${prop_i^^}=${cred_prop_val}" \
+        ""
+    fi
+  done
+}
+
+set_credentials() {
+  local cluster_roles=("TARGET" "ORIGIN")
+
+  for role_i in ${cluster_roles[*]}
+  do
+    set_cluster_role_credentials "$role_i"
+  done
+}
 
 set_operating_file_values() {
   local file_path="$1"
-  local env_var_prefix="$2"
+  local env_var_op="$2"
   local delimiter="$3"
   local delimiter_regex_match="[\ ]+"
   local delimiter_regex_replace="\2"
+  local env_config_values=()
+  local env_var_op_prefix=""
+  local env_var_prefix=""
 
-  env_config_values=("$(env | grep "$env_var_prefix" || echo '')")
+  env_var_op_prefix=$(cut -d':' -f1 <<<"$env_var_op")
+  case "$env_var_op_prefix" in
+  "env")
+    env_config_values=("${env_var_op/env:/}")
+    ;;
+  "prefix")
+    env_var_prefix="${env_var_op/prefix:/}"
+    env_config_values=("$(env | grep "${env_var_prefix}" || echo '')")
 
-  if [ "${#env_config_values[@]}" -eq 0 ] || [ -z "${env_config_values[*]}" ]
-  then
-    info "No environment variables with prefix '$env_var_prefix' found; using default property values in $file_path"
-    return 0
-  fi
+    if [ "${#env_config_values[@]}" -eq 0 ] || [ -z "${env_config_values[*]}" ]
+    then
+      info "No environment variables with prefix '${env_var_prefix}' found; using default property values in $file_path"
+      return 0
+    fi
+    ;;
+  "*")
+    error_exit "Unrecognised environment variable operation '$env_var_op_prefix'"
+    ;;
+  esac
 
   if [ -n "$delimiter" ]
   then
@@ -79,7 +129,7 @@ set_operating_file_values() {
   for env_var in ${env_config_values[*]}
   do
     env_var_key=$(cut -d'=' -f1 <<<"${env_var/$env_var_prefix/}")
-    conf_key=$(tr '[:upper:]' '[:lower:]' <<<"$env_var_key" | tr '_' '.')
+    conf_key=$(tr '_' '.' <<<"${env_var_key,,}")
     new_conf_val=${env_var/${env_var_prefix}${env_var_key}=/}
 
     temp_conf_val=""
@@ -120,8 +170,18 @@ set_operating_file_values() {
 
     info "${info_msg}"
 
-    done
+  done
 }
+
+set_configuration_properties() {
+  info "Reading CDM configuration properties from environment variables"
+  set_operating_file_values "$CDM_PROPERTIES_FILE" "prefix:CDM_PROPERTY_" ""
+
+  info "Reading log4j configuration properties from environment variables"
+  set_operating_file_values "$CDM_LOG4J_CONFIGURATION" "prefix:CDM_LOGGING_" "="
+}
+
+#--- main --------------------------------------------------------------------------------------------------------------
 
 # Have the option to override the default completion behaviour incase we want to run the entrypoint manually from
 # within the container.
@@ -132,8 +192,8 @@ info "Using Java $JAVA_VERSION"
 info "Using Spark $SPARK_VERSION"
 info "Using Scala $SCALA_VERSION"
 
-set_operating_file_values "$CDM_PROPERTIES_FILE" "CDM_PROPERTY_" ""
-set_operating_file_values "$CDM_LOG4J_CONFIGURATION" "CDM_LOGGING_" "="
+set_credentials
+set_configuration_properties
 
 info "Ready to run Cassandra Data Migrator. Run spark-submit-cdm to start the migration."
 

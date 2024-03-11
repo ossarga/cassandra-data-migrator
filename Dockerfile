@@ -48,14 +48,14 @@ RUN curl -OL https://repo1.maven.org/maven2/org/yaml/snakeyaml/${SNAKEYAML_VERSI
 
 ENV PATH=$PATH:${SPARK_HOME}/bin
 
-# Install Python 3.9
+# Install Python 3.9 and jq
 WORKDIR /usr/bin
 
 RUN apt-get update && \
     apt-get install -y jq software-properties-common vim && \
     add-apt-repository -y ppa:deadsnakes/ppa && \
     apt-get update && \
-    apt-get install -y python3.9 && \
+    apt-get install -y jq python3.9 && \
     unlink python3 && \
     ln -s python3.9 python3
 
