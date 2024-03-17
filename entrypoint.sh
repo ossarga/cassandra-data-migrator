@@ -2,9 +2,6 @@
 
 set -euo pipefail
 
-# Sets what to do after entrypoint has completed all its operations. By default we will wait indefinitely after we have
-# completed all the operations in the entrypoint.
-COMPLETION_ACTION="wait"
 IFS=$'\n'
 ERR_MSG=""
 
@@ -183,9 +180,33 @@ set_configuration_properties() {
 
 #--- main --------------------------------------------------------------------------------------------------------------
 
-# Have the option to override the default completion behaviour incase we want to run the entrypoint manually from
-# within the container.
-[ "$#" -gt 0 ] && COMPLETION_ACTION="$1"
+cdm_run_msg=""
+
+if [ "$CDM_SPARK_SUBMIT_EXECUTION_MODE" = "auto" ]
+then
+  [ "$#" -lt 1 ] && error_exit \
+    "No execution job specified. Please specify either 'migrate' or 'validate' as the first argument."
+
+  cdm_spark_job=""
+  case "${1,,}" in
+    migrate)
+      cdm_spark_job="Migrate"
+      ;;
+    validate)
+      cdm_spark_job="DiffData"
+      ;;
+    *)
+      error_exit "Unrecognised execution job '$1'. Please specify either 'migrate' or 'validate' as the first argument."
+      ;;
+  esac
+
+  cdm_run_msg="Running ${cdm_spark_job} job using the following command."
+elif [ "$CDM_SPARK_SUBMIT_EXECUTION_MODE" = "manual" ]
+then
+  cdm_run_msg="Run spark-submit-cdm to start the migration."
+else
+  error_exit "Unrecognised execution mode '$CDM_SPARK_SUBMIT_EXECUTION_MODE'. Please specify either 'auto' or 'manual'."
+fi
 
 info "Setting up Cassandra Data Migrator $CDM_VERSION"
 info "Using Java $JAVA_VERSION"
@@ -195,11 +216,23 @@ info "Using Scala $SCALA_VERSION"
 set_credentials
 set_configuration_properties
 
-info "Ready to run Cassandra Data Migrator. Run spark-submit-cdm to start the migration."
+info "Cassandra Data Migrator configured successfully. ${cdm_run_msg}"
 
-if [ "$COMPLETION_ACTION" = "exit" ]
+if [ "$CDM_SPARK_SUBMIT_EXECUTION_MODE" = "auto" ]
 then
-  exit 0
+  exec_cmd=(
+    spark-submit
+    --driver-java-options "-Dlog4j.configuration=file:$CDM_LOG4J_CONFIGURATION -Dvm.logging.level=$CDM_VM_LOGGING_LEVEL"
+    --properties-file "$CDM_PROPERTIES_FILE"
+    --master local[*]
+    --driver-memory "$CDM_DRIVER_MEMORY"
+    --executor-memory "$CDM_EXECUTOR_MEMORY"
+    --class com.datastax.cdm.job."${cdm_spark_job}"
+    /opt/cassandra-data-migrator/cassandra-data-migrator.jar
+  )
+  info "$(tr -s '\n' ' ' <<<"${exec_cmd[@]}")"
+  sleep 7
+  exec "${exec_cmd[@]}"
+else
+  exec tail -f /dev/null
 fi
-
-tail -f /dev/null
