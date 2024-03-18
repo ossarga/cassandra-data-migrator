@@ -95,7 +95,8 @@ ENV CDM_DRIVER_MEMORY=25G \
 
 ENV CDM_EXECUTION_MODE=auto \
     CDM_CREDENTIALS_TARGET_JSON="" \
-    CDM_CREDENTIALS_ORIGIN_JSON=""
+    CDM_CREDENTIALS_ORIGIN_JSON="" \
+    CMD_SSL_STORE_SETTINGS_JSON=""
 
 COPY entrypoint.sh spark-submit-cdm /usr/local/bin/
 RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/spark-submit-cdm

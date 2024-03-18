@@ -178,6 +178,40 @@ set_configuration_properties() {
   set_operating_file_values "$CDM_LOG4J_CONFIGURATION" "prefix:CDM_LOGGING_" "="
 }
 
+import_ssl_certificates() {
+    ssl_store_settings=${CMD_SSL_STORE_SETTINGS_JSON:-}
+    [ -z "$ssl_store_settings" ] && return
+    [ ! -f "$ssl_store_settings" ] && \
+      error_exit "Unable to find SSL store settings file $ssl_store_settings specified in CMD_SSL_STORE_SETTINGS_JSON"
+
+    info "Importing SSL certificate settings from $ssl_store_settings"
+
+    local alias_val=""
+    local file_val=""
+    local keystore_val=""
+    local storepass_val=""
+    local cert_settings_list=()
+
+    mapfile -t cert_settings_list < <(jq -r 'keys[]' <"$ssl_store_settings")
+
+    for cert_set in ${cert_settings_list[*]}
+    do
+      for property_name in "alias" "file" "keystore" "storepass"
+      do
+        eval "${property_name}_val=$(jq -r ".${cert_set}.${property_name}" <"$ssl_store_settings")"
+      done
+
+      keytool \
+        -import \
+        -trustcacerts \
+        -alias "$alias_val" \
+        -noprompt \
+        -file "$file_val" \
+        -keystore "$keystore_val" \
+        -storepass "$storepass_val"
+    done
+}
+
 #--- main --------------------------------------------------------------------------------------------------------------
 
 cdm_run_msg=""
@@ -215,6 +249,7 @@ info "Using Scala $SCALA_VERSION"
 
 set_credentials
 set_configuration_properties
+import_ssl_certificates
 
 info "Cassandra Data Migrator configured successfully. ${cdm_run_msg}"
 
