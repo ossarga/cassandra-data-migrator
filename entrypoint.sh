@@ -54,10 +54,10 @@ set_cluster_role_credentials() {
   local credentials_user=""
   local cred_properties=("username" "password")
 
-  eval "credentials_user=\${CDM_CREDENTIALS_${cluster_role}_USER:-}"
+  eval "credentials_user=\${CDM_CREDENTIALS_${cluster_role}_JSON:-}"
   [ -z "$credentials_user" ] && return
   [ ! -f "$credentials_user" ] && \
-    error_exit "Unable to find credentials file $credentials_user specified in CDM_CREDENTIALS_${cluster_role}_USER"
+    error_exit "Unable to find credentials file $credentials_user specified in CDM_CREDENTIALS_${cluster_role}_JSON"
 
   info "Reading credentials from $credentials_user for $cluster_role cluster"
 
@@ -182,7 +182,7 @@ set_configuration_properties() {
 
 cdm_run_msg=""
 
-if [ "$CDM_SPARK_SUBMIT_EXECUTION_MODE" = "auto" ]
+if [ "$CDM_EXECUTION_MODE" = "auto" ]
 then
   [ "$#" -lt 1 ] && error_exit \
     "No execution job specified. Please specify either 'migrate' or 'validate' as the first argument."
@@ -201,11 +201,11 @@ then
   esac
 
   cdm_run_msg="Running ${cdm_spark_job} job using the following command."
-elif [ "$CDM_SPARK_SUBMIT_EXECUTION_MODE" = "manual" ]
+elif [ "$CDM_EXECUTION_MODE" = "manual" ]
 then
   cdm_run_msg="Run spark-submit-cdm to start the migration."
 else
-  error_exit "Unrecognised execution mode '$CDM_SPARK_SUBMIT_EXECUTION_MODE'. Please specify either 'auto' or 'manual'."
+  error_exit "Unrecognised execution mode '$CDM_EXECUTION_MODE'. Please specify either 'auto' or 'manual'."
 fi
 
 info "Setting up Cassandra Data Migrator $CDM_VERSION"
@@ -218,7 +218,7 @@ set_configuration_properties
 
 info "Cassandra Data Migrator configured successfully. ${cdm_run_msg}"
 
-if [ "$CDM_SPARK_SUBMIT_EXECUTION_MODE" = "auto" ]
+if [ "$CDM_EXECUTION_MODE" = "auto" ]
 then
   exec_cmd=(
     spark-submit
