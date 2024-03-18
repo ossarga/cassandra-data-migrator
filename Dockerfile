@@ -93,7 +93,9 @@ ENV CDM_LOG4J_CONFIGURATION=$CDM_LOG4J_PROPERTIES
 ENV CDM_DRIVER_MEMORY=25G \
     CDM_EXECUTOR_MEMORY=25G
 
-ENV CDM_SPARK_SUBMIT_EXECUTION_MODE=auto
+ENV CDM_EXECUTION_MODE=auto \
+    CDM_CREDENTIALS_TARGET_JSON="" \
+    CDM_CREDENTIALS_ORIGIN_JSON=""
 
 COPY entrypoint.sh spark-submit-cdm /usr/local/bin/
 RUN chmod 755 /usr/local/bin/entrypoint.sh /usr/local/bin/spark-submit-cdm
