@@ -1,9 +1,27 @@
 #!/bin/bash
 
+cdm_spark_job=""
+case "${CDM_JOB_NAME,,}" in
+  migrate)
+    cdm_spark_job="Migrate"
+    ;;
+  validate|diffdata)
+    cdm_spark_job="DiffData"
+    ;;
+  guardrail|guardrailcheck)
+    cdm_spark_job="GuardrailCheck"
+    ;;
+  *)
+    echo "ERROR: Unrecognised job name '$CDM_JOB_NAME'. Valid job names are: 'migrate', 'validate', or 'guardrail'." >&2
+    exit 1
+    ;;
+esac
+
 exec spark-submit \
   --driver-java-options "-Dlog4j.configuration=file:$CDM_LOG4J_CONFIGURATION -Dvm.logging.level=$CDM_VM_LOGGING_LEVEL" \
   --properties-file "$CDM_PROPERTIES_FILE" \
   --master "local[*]" \
   --driver-memory "$CDM_DRIVER_MEMORY" \
   --executor-memory "$CDM_EXECUTOR_MEMORY" \
-  --class com.datastax.cdm.job.Migrate /opt/cassandra-data-migrator/cassandra-data-migrator.jar
+  --class com.datastax.cdm.job.${cdm_spark_job} \
+  /opt/cassandra-data-migrator/cassandra-data-migrator.jar

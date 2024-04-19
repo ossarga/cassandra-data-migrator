@@ -215,29 +215,29 @@ import_ssl_certificates() {
 #--- main --------------------------------------------------------------------------------------------------------------
 
 cdm_run_msg=""
+cdm_spark_job=""
 
 if [ "$CDM_EXECUTION_MODE" = "auto" ]
 then
-  [ "$#" -lt 1 ] && error_exit \
-    "No execution job specified. Please specify either 'migrate' or 'validate' as the first argument."
-
-  cdm_spark_job=""
-  case "${1,,}" in
+  case "${CDM_JOB_NAME,,}" in
     migrate)
       cdm_spark_job="Migrate"
       ;;
-    validate)
+    validate|diffdata)
       cdm_spark_job="DiffData"
       ;;
+    guardrail|guardrailcheck)
+      cdm_spark_job="GuardrailCheck"
+      ;;
     *)
-      error_exit "Unrecognised execution job '$1'. Please specify either 'migrate' or 'validate' as the first argument."
+      error_exit "Unrecognised job name '$CDM_JOB_NAME'. Valid job names are: 'migrate', 'validate', or 'guardrail'."
       ;;
   esac
 
   cdm_run_msg="Running ${cdm_spark_job} job using the following command."
 elif [ "$CDM_EXECUTION_MODE" = "manual" ]
 then
-  cdm_run_msg="Run spark-submit-cdm to start the migration."
+  cdm_run_msg="Run spark-submit-cdm to launch the '$CDM_JOB_NAME' job."
 else
   error_exit "Unrecognised execution mode '$CDM_EXECUTION_MODE'. Please specify either 'auto' or 'manual'."
 fi
