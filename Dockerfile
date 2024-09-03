@@ -1,7 +1,9 @@
 FROM eclipse-temurin:17-jammy
 
-ENV CDM_VERSION=4.1.12 \
-    SPARK_VERSION=3.4.2 \
+ARG GITHUB_TOKEN
+
+ENV CDM_VERSION=4.3.6 \
+    SPARK_VERSION=3.5.2 \
     SCALA_VERSION=2.13.12 \
     ZOOKEEPER_VERSION=3.8.3 \
     SNAKEYAML_VERSION=2.0
@@ -62,7 +64,7 @@ RUN apt-get update && \
 # Install CDM and configuration files
 WORKDIR /opt/cassandra-data-migrator
 
-RUN curl -OL https://github.com/datastax/cassandra-data-migrator/releases/download/${CDM_VERSION}/cassandra-data-migrator-${CDM_VERSION}.jar && \
+RUN curl -OL -H "Authorization: Bearer ${GITHUB_TOKEN}" https://maven.pkg.github.com/datastax/cassandra-data-migrator/datastax/cdm/cassandra-data-migrator/${CDM_VERSION}/cassandra-data-migrator-${CDM_VERSION}.jar && \
     curl -OL https://raw.githubusercontent.com/datastax/cassandra-data-migrator/${CDM_VERSION}/src/resources/cdm.properties && \
     curl -OL https://raw.githubusercontent.com/datastax/cassandra-data-migrator/${CDM_VERSION}/src/resources/cdm-detailed.properties && \
     curl -OL https://raw.githubusercontent.com/datastax/cassandra-data-migrator/${CDM_VERSION}/src/resources/partitions.csv && \
