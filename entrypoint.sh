@@ -88,12 +88,14 @@ set_credentials() {
 set_operating_file_values() {
   local file_path="$1"
   local env_var_op="$2"
-  local delimiter="$3"
-  local delimiter_regex_match="[\ ]+"
+  local delimiter_global="$3"
+  local delimiter_regex_match="([[:space:]]+)"
   local delimiter_regex_replace="\2"
+  local delimiter="$delimiter_global"
   local env_config_values=()
   local env_var_op_prefix=""
   local env_var_prefix=""
+  local conf_val_regex_match=".*"
 
   env_var_op_prefix=$(cut -d':' -f1 <<<"$env_var_op")
   case "$env_var_op_prefix" in
@@ -115,30 +117,32 @@ set_operating_file_values() {
     ;;
   esac
 
-  if [ -n "$delimiter" ]
-  then
-    delimiter_regex_match="[\ ]*${delimiter}[\ ]*"
-  else
-    delimiter=" "
-  fi
-
   info "Updating settings in $file_path"
   for env_var in ${env_config_values[*]}
   do
+    if [ -n "$delimiter_global" ]
+    then
+      delimiter_regex_match="([[:space:]]*${delimiter_global}[[:space:]]*)"
+      delimiter="$delimiter_global"
+    else
+      delimiter_regex_match="([[:space:]]+)"
+      delimiter=" "
+    fi
+
     env_var_key=$(cut -d'=' -f1 <<<"${env_var/$env_var_prefix/}")
     conf_key=$(tr '_' '.' <<<"${env_var_key,,}")
-    new_conf_val=${env_var/${env_var_prefix}${env_var_key}=/}
+    conf_val_new=${env_var/${env_var_prefix}${env_var_key}=/}
 
     temp_conf_val=""
-    if [ "${new_conf_val:0:4}" = "env:" ]
+    if [ "${conf_val_new:0:4}" = "env:" ]
     then
-        eval "temp_conf_val=\$$(cut -d':' -f2 <<<"$new_conf_val")"
-        new_conf_val="$temp_conf_val"
+        eval "temp_conf_val=\$$(cut -d':' -f2 <<<"$conf_val_new")"
+        conf_val_new="$temp_conf_val"
     fi
 
     # Use true to catch the case where the conf_key is not found in the file, otherwise grep will return a non-zero
     # exit code and cause the container to exit without a useful error message.
-    conf_line=$(grep -i -e "^[#]*${conf_key}" "$file_path" || true)
+    conf_line=$(grep -i -E "^[#]?${conf_key}(${delimiter_regex_match}|$)" "$file_path" || true)
     if [ -z "$conf_line" ]
     then
       error_exit "Unable to find property $conf_key in $file_path"
@@ -152,18 +156,22 @@ set_operating_file_values() {
     fi
 
     # Check if the line contains spaces and a value after the property key. If there is no space and value, then remove
-    # the delimiter matching and set the delimiter replacement to eight spaces.
+    # the delimiter matching and set the delimiter replacement to four spaces.
     if [ "$(tr -s ' ' <<<"$conf_line" | cut -d"$delimiter" -f2 | tr -d ' ')" = "$conf_line" ]
     then
       delimiter_regex_match=""
-      delimiter_regex_replace="        "
+      delimiter_regex_replace="    "
+      conf_val_regex_match="$"
+    else
+      delimiter_regex_replace="\2"
+      conf_val_regex_match=".*"
     fi
 
     info_msg="$info_msg property $conf_key"
 
     # perform a case insensitive search and replace as the conf_key is all lower case and the CDM Properties file
     # contains camel case properties.
-    sed -i -E "s;^[#]?($conf_key)($delimiter_regex_match).*;\1${delimiter_regex_replace}${new_conf_val};i" "$file_path"
+    sed -i -E "s;^[#]?(${conf_key})${delimiter_regex_match}${conf_val_regex_match};\1${delimiter_regex_replace}${conf_val_new};i" "$file_path"
 
     info "${info_msg}"
 
