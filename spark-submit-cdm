@@ -1,7 +1,14 @@
 #!/bin/bash
 
+cdm_job_name_arg="$1"
+if [ -z "$cdm_job_name_arg" ] && [ -n "$CDM_JOB_NAME" ]
+then
+  cdm_job_name_arg="$CDM_JOB_NAME"
+  echo "INFO: Using job name '$cdm_job_name_arg' from environment variable CDM_JOB_NAME."
+fi
+
 cdm_spark_job=""
-case "${CDM_JOB_NAME,,}" in
+case "${cdm_job_name_arg,,}" in
   migrate)
     cdm_spark_job="Migrate"
     ;;
@@ -12,16 +19,21 @@ case "${CDM_JOB_NAME,,}" in
     cdm_spark_job="GuardrailCheck"
     ;;
   *)
-    echo "ERROR: Unrecognised job name '$CDM_JOB_NAME'. Valid job names are: 'migrate', 'validate', or 'guardrail'." >&2
+    echo "ERROR: Unrecognised job name '$cdm_job_name_arg'. Valid job names are: 'migrate', 'validate', or 'guardrail'." >&2
     exit 1
     ;;
 esac
 
-exec spark-submit \
-  --driver-java-options "-Dlog4j.configuration=file:$CDM_LOG4J_CONFIGURATION -Dvm.logging.level=$CDM_VM_LOGGING_LEVEL" \
-  --properties-file "$CDM_PROPERTIES_FILE" \
-  --master "local[*]" \
-  --driver-memory "$CDM_DRIVER_MEMORY" \
-  --executor-memory "$CDM_EXECUTOR_MEMORY" \
-  --class com.datastax.cdm.job.${cdm_spark_job} \
+exec_cmd=(
+  spark-submit
+  --driver-java-options "-Dlog4j.configuration=file:$CDM_LOG4J_CONFIGURATION -Dvm.logging.level=$CDM_VM_LOGGING_LEVEL"
+  --properties-file "$CDM_PROPERTIES_FILE"
+  --master local[*]
+  --driver-memory "$CDM_DRIVER_MEMORY"
+  --executor-memory "$CDM_EXECUTOR_MEMORY"
+  --class com.datastax.cdm.job."${cdm_spark_job}"
   /opt/cassandra-data-migrator/cassandra-data-migrator.jar
+)
+echo "$(tr -s '\n' ' ' <<<"${exec_cmd[@]}")"
+sleep 7
+exec "${exec_cmd[@]}"

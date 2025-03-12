@@ -245,7 +245,16 @@ then
   cdm_run_msg="Running ${cdm_spark_job} job using the following command."
 elif [ "$CDM_EXECUTION_MODE" = "manual" ]
 then
-  cdm_run_msg="Run spark-submit-cdm to launch the '$CDM_JOB_NAME' job."
+  cdm_run_msg="Run"
+  alternative_word=" "
+
+  if [ -n "$CDM_JOB_NAME" ]
+  then
+    cdm_run_msg="${cdm_run_msg} 'spark-submit-cdm' to launch the '$CDM_JOB_NAME' job, or run"
+    alternative_word=" different "
+  fi
+
+  cdm_run_msg="${cdm_run_msg} 'spark-submit-cdm <job>' to launch a${alternative_word}CDM job."
 else
   error_exit "Unrecognised execution mode '$CDM_EXECUTION_MODE'. Please specify either 'auto' or 'manual'."
 fi
