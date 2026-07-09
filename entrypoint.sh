@@ -262,7 +262,6 @@ fi
 info "Setting up Cassandra Data Migrator $CDM_VERSION"
 info "Using Java $JAVA_VERSION"
 info "Using Spark $SPARK_VERSION"
-info "Using Scala $SCALA_VERSION"
 
 set_credentials
 set_configuration_properties

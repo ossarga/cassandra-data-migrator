@@ -1,2 +1,7 @@
-# IntelliJ
+.bob
 .idea/
+.py*/
+
+.python-version
+**/*.tgz
+**/*.tar.gz
