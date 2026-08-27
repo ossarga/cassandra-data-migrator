@@ -7,6 +7,7 @@ import re
 import shutil
 import sys
 import tempfile
+import time
 import typing
 import urllib.request
 import urllib.error
@@ -14,11 +15,21 @@ import zipfile
 
 
 class DependencyLib:
-    def __init__(self, filename: str, group_path: str, old_version: str, new_version: str) -> None:
+    def __init__(
+        self,
+        filename: str,
+        group: str,
+        old_version: str,
+        new_version: str,
+        retries: int = 3,
+        retry_delay: float = 5.0,
+    ) -> None:
         self._old_version = old_version
         self._new_version = new_version
+        self._group = group
+        self._retries = retries
+        self._retry_delay = retry_delay
 
-        self._group_path = group_path
         self.old_filename = filename
         self.new_filename = ''
 
@@ -47,7 +58,7 @@ class DependencyLib:
         self.lib_name = self.new_filename[0:version_index]
 
     @staticmethod
-    def _check_downloaded_file(file_path) -> None:
+    def _check_downloaded_file(file_path: str) -> None:
         if os.path.isfile(file_path):
             if os.path.getsize(file_path) > 0:
                 if zipfile.is_zipfile(file_path):
@@ -67,25 +78,37 @@ class DependencyLib:
         else:
             raise FileExistsError(f'Error: Download failed, unable to locate {file_path}')
 
-
     def _download_new_lib(self) -> None:
         new_file_temp_path = os.path.join(tempfile.gettempdir(), self.new_filename)
-        maven_url = 'https://repo1.maven.org/maven2/' \
-            + \
-            f'{self._group_path}/{self.lib_name}/{self._new_version}/{self.new_filename}'
+        maven_url = (
+            'https://repo1.maven.org/maven2/'
+            f'{self._group.replace(".", "/")}/{self.lib_name}/{self._new_version}/{self.new_filename}'
+        )
 
-        try:
-            urllib.request.urlretrieve(maven_url, new_file_temp_path)
-            DependencyLib._check_downloaded_file(new_file_temp_path)
-            print(f'Successfully downloaded {self.old_filename}')
+        last_exc: Exception | None = None
+        for attempt in range(1, self._retries + 1):
+            try:
+                urllib.request.urlretrieve(maven_url, new_file_temp_path)
+                DependencyLib._check_downloaded_file(new_file_temp_path)
+                print(f'Successfully downloaded {self.new_filename}')
+                self._new_file_temp_path = new_file_temp_path
+                self._file_bin.append(new_file_temp_path)
+                return
+            except urllib.error.HTTPError as e:
+                # HTTP 4xx errors are permanent — do not retry
+                print(f'Error: Failed to download {maven_url} (HTTP {e.code})')
+                raise e
+            except Exception as e:
+                last_exc = e
+                if attempt < self._retries:
+                    delay = self._retry_delay * (2 ** (attempt - 1))
+                    print(
+                        f'Warning: Download attempt {attempt}/{self._retries} failed '
+                        f'({e}). Retrying in {delay:.0f}s ...'
+                    )
+                    time.sleep(delay)
 
-            self._new_file_temp_path = new_file_temp_path
-            self._file_bin.append(new_file_temp_path)
-        except urllib.error.HTTPError as e:
-            print(f'Error: Failed to download {maven_url}')
-            raise e
-        except Exception as e:
-            raise e
+        raise last_exc
 
     def _empty_file_bin(self) -> None:
         for file_path in self._file_bin:
@@ -131,9 +154,33 @@ class UpdateDependencies:
         parser.add_argument(
             'dependency_update_json',
             type=str,
-            help='Path to a JSON file containing the dependencies to update.'
+            help='Path to a JSON file containing the dependencies to update.',
         )
-        parser.add_argument('dependency_path', type=str, help='Path to the application dependencies directory.')
+        parser.add_argument(
+            'dependency_path',
+            type=str,
+            help='Path to the application dependencies directory.',
+        )
+        parser.add_argument(
+            '--retries',
+            type=int,
+            default=3,
+            metavar='N',
+            help=(
+                'Number of download attempts per JAR before giving up. '
+                'HTTP 4xx errors are not retried regardless of this setting (default: 3).'
+            ),
+        )
+        parser.add_argument(
+            '--retry-delay',
+            type=float,
+            default=5.0,
+            metavar='SECONDS',
+            help=(
+                'Initial delay in seconds between retry attempts. '
+                'Each subsequent attempt doubles the delay (exponential backoff, default: 5).'
+            ),
+        )
 
         return parser.parse_args()
 
@@ -147,9 +194,11 @@ class UpdateDependencies:
 
         for dep_item in dependency_list:
             dep_name = dep_item['name']
-            group_path = dep_item['group']
+            group = dep_item['group']
             old_version = dep_item['versions']['old']
             new_version = dep_item['versions']['new']
+            retries = parsed_args.retries
+            retry_delay = parsed_args.retry_delay
 
             # Regex is searching for the following JAR naming format:
             #
@@ -178,7 +227,10 @@ class UpdateDependencies:
                     filename_match = re.match(pattern, filename)
                     if filename_match:
                         try:
-                            with DependencyLib(filename, group_path, old_version, new_version) as dependency_lib:
+                            with DependencyLib(
+                                filename, group, old_version, new_version,
+                                retries=retries, retry_delay=retry_delay,
+                            ) as dependency_lib:
                                 dependency_lib.update(parsed_args.dependency_path)
                         except Exception as e:
                             print(e)

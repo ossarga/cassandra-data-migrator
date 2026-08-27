@@ -1,4 +1,4 @@
-# Spark Package Source directory
+# Spark Package Upload directory
 
 This directory is used as a source for the Spark package that is installed on the container image.
 
