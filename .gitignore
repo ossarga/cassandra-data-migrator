@@ -2,6 +2,11 @@
 .idea/
 .py*/
 
+reports/
+patch-reports-upload/*.json
+spark-package-upload/*.tar.gz
+
 .python-version
+.github-auth
 **/*.tgz
 **/*.tar.gz
