@@ -1,8 +1,9 @@
 ARG CDM_VERSION_ARG=6.1.0
 ARG SPARK_VERSION_ARG=4.2.0
 
-ARG TRIVY_REPORT_FILENAME_ARG=trivy-image-report.json
-ARG SPARK_JAR_PATCH_FILENAME_ARG=""
+ARG TRIVY_REPORT_FILENAME_ARG=""
+ARG PATCH_DIRECTORY_ARG=""
+
 
 # --- Stage 1: Download Spark and Cassandra Data Migrator ---
 FROM debian:bookworm-slim AS download-binaries
@@ -50,7 +51,7 @@ RUN --mount=type=secret,id=github_auth \
 FROM python:3.12-slim-bookworm AS update-packages
 
 ARG TRIVY_REPORT_FILENAME_ARG
-ARG SPARK_JAR_PATCH_FILENAME_ARG
+ARG PATCH_DIRECTORY_ARG
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
@@ -61,33 +62,45 @@ COPY --from=download-binaries /download/spark-package ./spark-package
 COPY ./build-tools ./build-tools
 COPY ./patch-reports-upload ./patch-reports-upload
 
-RUN PATCHING_SKIPPED_MSG="No image report supplied; skipping image patching" && \
+RUN PATCHING_SKIPPED_MSG="No image report or patch JSON files supplied; skipping image patching" && \
     mkdir ./build-artefacts && \
-    if [ -z "${TRIVY_REPORT_FILENAME_ARG}" ]; then \
+    if [ -z "${TRIVY_REPORT_FILENAME_ARG}" ] && [ -z "${PATCH_DIRECTORY_ARG}" ]; then \
         echo "${PATCHING_SKIPPED_MSG}"; \
         echo "${PATCHING_SKIPPED_MSG}" > ./build-artefacts/spark-jar-remediation.txt && \
         echo "${PATCHING_SKIPPED_MSG}" > ./build-artefacts/os-remediation.txt; \
-    elif [ -f "./patch-reports-upload/${TRIVY_REPORT_FILENAME_ARG}" ]; then \
-        echo "Image report supplied; patching image..." && \
-        ./build-tools/parse-vulnerabilities.py \
-            ./patch-reports-upload/${TRIVY_REPORT_FILENAME_ARG} \
-            ./build-artefacts/spark-jar-patch.json \
-            ./build-artefacts/spark-jar-remediation.txt \
-            ./build-artefacts/os-patch.json \
-            ./build-artefacts/os-remediation.txt \
-            --resolve-direct \
-            --resolve-indirect \
-            --skip-prefixes spark- cassandra-data-migrator && \
-        if [ -n "${SPARK_JAR_PATCH_FILENAME_ARG}" ] && [ -f "./patch-reports-upload/${SPARK_JAR_PATCH_FILENAME_ARG}" ]; then \
-            rm ./build-artefacts/spark-jar-patch.json && \
-            cp "./patch-reports-upload/${SPARK_JAR_PATCH_FILENAME_ARG}" ./build-artefacts/spark-jar-patch.json; \
+    else \
+        if [ -n "${TRIVY_REPORT_FILENAME_ARG}" ]; then \
+            if [ -f "./patch-reports-upload/${TRIVY_REPORT_FILENAME_ARG}" ]; then \
+                ./build-tools/parse-vulnerabilities.py \
+                ./patch-reports-upload/${TRIVY_REPORT_FILENAME_ARG} \
+                ./build-artefacts/spark-jar-patch.json \
+                ./build-artefacts/spark-jar-remediation.txt \
+                ./build-artefacts/os-package-patch.json \
+                ./build-artefacts/os-package-remediation.txt \
+                --resolve-direct \
+                --resolve-indirect \
+                --skip-prefixes spark- cassandra-data-migrator; \
+            else \
+                echo "Error: Unable to find image report ${TRIVY_REPORT_FILENAME_ARG}; aborting build!" && \
+                exit 1; \
+            fi \
+        elif [ -n "${PATCH_DIRECTORY_ARG}" ]; then \
+            if [ -f "./patch-reports-upload/${PATCH_DIRECTORY_ARG}/spark-jar-patch.json" ]; then \
+                if [ -f "./patch-reports-upload/${PATCH_DIRECTORY_ARG}/os-package-patch.json" ]; then \
+                    cp -a "./patch-reports-upload/${PATCH_DIRECTORY_ARG}/." "./build-artefacts/"; \
+                else \
+                    echo "Error: Unable to find os-package-patch.json file in ${PATCH_DIRECTORY_ARG} directory; aborting build!" && \
+                    exit 1; \
+                fi \
+            else \
+                echo "Error: Unable to find spark-jar-patch.json file in ${PATCH_DIRECTORY_ARG} directory; aborting build!" && \
+                exit 1; \
+            fi \
         fi && \
         ./build-tools/update-jar-dependencies.py ./build-artefacts/spark-jar-patch.json ./spark-package/jars && \
-        ./build-tools/update-os-packages.py ./build-artefacts/os-patch.json ./build-artefacts/os-package-updates.sh; \
-    else \
-        echo "Error: Unable to find image report ${TRIVY_REPORT_FILENAME_ARG}; aborting build!"; \
-        exit 1; \
+        ./build-tools/update-os-packages.py ./build-artefacts/os-package-patch.json ./build-artefacts/os-package-updates.sh; \
     fi
+
 
 # --- Stage 3: Install Spark and Cassandra Data Migrator ---
 FROM eclipse-temurin:17-jre-alpine AS cdm-final

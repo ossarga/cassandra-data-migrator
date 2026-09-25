@@ -9,6 +9,8 @@ DATE_NOW=$(date "+%Y%m%d")
 IMAGE_TAG="${CDM_VERSION}.${GIT_HASH}.${DATE_NOW}"
 IMAGE_NAME=docker.io/ossarga/cassandra-data-migrator
 
+PATCH_DIRECTORY=""
+
 DOWNLOAD_CONTAINER_NAME=""
 
 EXIT_STATUS=0
@@ -80,6 +82,66 @@ check_image() {
 }
 
 
+usage() {
+    cat <<EOF
+Usage: $(basename "$0") [OPTIONS]
+
+Build, scan, and push the Cassandra Data Migrator image.
+
+By default the script builds an image, scans it with Trivy,
+and rebuilds it with the generated patches applied.
+
+Options:
+  --patch-dir <patch-directory>
+        Skips the initial build and Trivy scan, and builds the final image
+        directly using the "spark-jar-patch.json" and "os-package-patch.json"
+        patch files located in the <patch-directory>. Both files must exist
+        together in the directory. All contents of the directory are placed
+        in the final image.
+
+  --help
+        Show this help message and exit.
+
+Examples:
+  # Default mode — build, Trivy scan, patched rebuild:
+  $(basename "$0")
+
+  # Patch file mode — skip initial build and Trivy scan:
+  $(basename "$0") --patch-files ./patches/spark-jar-patch.json ./patches/os-package-patch.json
+EOF
+}
+
+while [[ $# -gt 0 ]]
+do
+    case "$1" in
+        --patch-dir)
+            PATCH_DIRECTORY="$2"
+            shift 2
+            ;;
+        --help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Error: Unknown argument '$1'"
+            echo "Run '$(basename "$0") --help' for usage information."
+            exit 1
+            ;;
+    esac
+done
+
+if [ -n "${PATCH_DIRECTORY}" ]
+then
+    for patch_json in spark-jar-patch.json os-package-patch.json
+    do
+        if [ ! -f "${PATCH_DIRECTORY}/${patch_json}" ]
+        then
+            echo "Error: Unable to find the ${patch_json} file in ${PATCH_DIRECTORY}"
+            exit 1
+        fi
+    done
+fi
+
 trap 'cleanup' EXIT
 
 trap 'EXIT_STATUS=$?; FAILED_LINE="$LINENO"; FAILED_CMD="$BASH_COMMAND"; exit $EXIT_STATUS' ERR
@@ -90,32 +152,57 @@ trap 'EXIT_STATUS=143; exit 143' SIGTERM
 echo "-------------------------------------------------------------------------"
 echo "Image tag is: ${IMAGE_TAG}"
 echo "-------------------------------------------------------------------------"
-echo ":: Building image ::"
-podman build \
-    --secret id=github_auth,src=.github-auth \
-    --pull=always \
-    --no-cache \
-    --platform linux/amd64 \
-    --build-arg TRIVY_REPORT_FILENAME_ARG="" \
-    --tag "${IMAGE_NAME}:${IMAGE_TAG}.amd64" \
-    .
 
 mkdir -p "./reports/${IMAGE_TAG}/"
 
-echo "-------------------------------------------------------------------------"
-echo ":: Checking image ::"
-check_image "./reports/${IMAGE_TAG}/unpatched-image-vulnerabilities-report.json"
-cp "./reports/${IMAGE_TAG}/unpatched-image-vulnerabilities-report.json" "./patch-reports-upload/trivy-report_${IMAGE_TAG}.amd64.json"
+if [ -n "${PATCH_DIRECTORY}" ]
+then
+    patch_directory_name="$(basename "${PATCH_DIRECTORY}")"
 
-echo "-------------------------------------------------------------------------"
-echo ":: Rebuilding image with patches ::"
-podman build \
-    --secret id=github_auth,src=.github-auth \
-    --pull=never \
-    --platform linux/amd64 \
-    --build-arg TRIVY_REPORT_FILENAME_ARG="trivy-report_${IMAGE_TAG}.amd64.json" \
-    --tag "${IMAGE_NAME}:${IMAGE_TAG}.amd64" \
-    .
+    echo ":: Patch file mode — skipping vanilla build and Trivy scan ::"
+    if [ ! "${PATCH_DIRECTORY}" -ef "./patch-reports-upload/${patch_directory_name}" ]
+    then
+        mkdir -p "./patch-reports-upload/${patch_directory_name}"
+        cp -av "${PATCH_DIRECTORY}/." "./patch-reports-upload/${patch_directory_name}/"
+    fi
+
+    echo "-------------------------------------------------------------------------"
+    echo ":: Building image with user patches ::"
+    podman build \
+        --secret id=github_auth,src=.github-auth \
+        --pull=always \
+        --no-cache \
+        --platform linux/amd64 \
+        --build-arg TRIVY_REPORT_FILENAME_ARG="" \
+        --build-arg PATCH_DIRECTORY_ARG="${patch_directory_name}" \
+        --tag "${IMAGE_NAME}:${IMAGE_TAG}.amd64" \
+        .
+else
+    echo ":: Building image for scanning ::"
+    podman build \
+        --secret id=github_auth,src=.github-auth \
+        --pull=always \
+        --no-cache \
+        --platform linux/amd64 \
+        --tag "${IMAGE_NAME}:${IMAGE_TAG}.amd64" \
+        .
+
+    echo "-------------------------------------------------------------------------"
+    echo ":: Checking image ::"
+    check_image "./reports/${IMAGE_TAG}/unpatched-image-vulnerabilities-report.json"
+    cp "./reports/${IMAGE_TAG}/unpatched-image-vulnerabilities-report.json" "./patch-reports-upload/trivy-report_${IMAGE_TAG}.amd64.json"
+
+    echo "-------------------------------------------------------------------------"
+    echo ":: Rebuilding image with patches ::"
+    podman build \
+        --secret id=github_auth,src=.github-auth \
+        --pull=never \
+        --platform linux/amd64 \
+        --build-arg TRIVY_REPORT_FILENAME_ARG="trivy-report_${IMAGE_TAG}.amd64.json" \
+        --build-arg PATCH_DIRECTORY_ARG="" \
+        --tag "${IMAGE_NAME}:${IMAGE_TAG}.amd64" \
+        .
+fi
 
 echo "-------------------------------------------------------------------------"
 echo ":: Re-checking image ::"
