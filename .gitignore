@@ -1,12 +1,12 @@
 .bob
-.idea/
-.py*/
+.py*/*
 
-reports/
-patch-reports-upload/*.json
-spark-package-upload/*.tar.gz
+reports/*
+patch-reports-upload/*
+spark-package-upload/*
 
 .python-version
 .github-auth
-**/*.tgz
-**/*.tar.gz
+
+!patch-reports-upload/README.md
+!spark-package-upload/README.md
